@@ -73,14 +73,17 @@ def load_alerts():
         LIMIT 50
     """)
 
-# 특정 수조 선택 or 조회 기간 변경 시, 동적 필터링 적용
+# 특정 수조 선택 or 조회 기간 변경 시, 동적 필터링 적용 (캐시 없이 실시간 조회)
 def load_timeseries(tank_id, days=7):
-    return load_data(f"""
+    con = sqlite3.connect(DB_PATH)
+    df = pd.read_sql(f"""
         SELECT * FROM sensor_timeseries
         WHERE tank_id = '{tank_id}'
-          AND timestamp >= datetime('now', '+9 hours', '-{days} days')
-        ORDER BY timestamp
-    """)
+        ORDER BY timestamp DESC
+        LIMIT {days * 24 * 2}
+    """, con)
+    con.close()
+    return df.sort_values("timestamp")
     
 # 헤더
 col1, col2 = st.columns([3, 1])  # 화면 비율 나누기 -> 제목, 현재 시간 배치
