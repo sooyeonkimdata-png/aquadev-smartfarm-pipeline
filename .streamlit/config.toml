@@ -1,0 +1,5 @@
+[theme]
+backgroundColor = "#f0f4fa"           # 메인 배경
+secondaryBackgroundColor = "#cfe5f6"  # 사이드바 배경
+textColor = "#000000"                 # 글자색
+primaryColor = "#0092fe"              # 강조색
