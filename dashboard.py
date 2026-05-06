@@ -50,7 +50,6 @@ THRESHOLDS = {
 
 
 # (Streamlit 대시보드로 효율적으로 불러오기 위한) db 조회 함수
-@st.cache_data(ttl=1800)  # 30분마다 캐시 갱신(Time to Live), 반환되는 결과값은 메모리에 저장 (쿼리로 호출 시 db 대신 메모리에서 조회)
 def load_data(query):     
     con = sqlite3.connect(DB_PATH)  # sqlite3로 db에 연결
     df  = pd.read_sql(query, con)   # 쿼리 결과를 df로 반환
