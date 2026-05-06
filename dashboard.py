@@ -78,7 +78,7 @@ def load_timeseries(tank_id, days=7):
     return load_data(f"""
         SELECT * FROM sensor_timeseries
         WHERE tank_id = '{tank_id}'
-          AND timestamp >= datetime('now', '-{days} days')
+          AND timestamp >= datetime('now', '+9 hours', '-{days} days')
         ORDER BY timestamp
     """)
     
