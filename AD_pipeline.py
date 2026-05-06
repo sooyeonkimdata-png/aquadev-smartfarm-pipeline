@@ -366,7 +366,7 @@ def export_csvs(sensor_df):
 if __name__ == "__main__":
     from datetime import datetime, timedelta
     end   = datetime.now()
-    start = end - timedelta(days=3)
+    start = end - timedelta(days=DAYS)
 
     df    = generate_sensor_timeseries(start, end)
     valid = validate_data(df)
