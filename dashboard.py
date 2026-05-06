@@ -16,9 +16,6 @@ st.set_page_config(
 
 DB_PATH = Path("./output/aquafarm.db")  # db 경로를 변수에 미리 저장
 
-st.write(f"DB 경로: {DB_PATH.resolve()}")
-st.write(f"DB 존재: {DB_PATH.exists()}")
-
 st.markdown("""
     <style>
     [data-testid="stMetricLabel"] p {
