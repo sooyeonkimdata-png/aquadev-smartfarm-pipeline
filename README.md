@@ -5,7 +5,7 @@
 
 
 ## 프로젝트 구조
-
+```
 AD_project/
 ├── AD_pipeline.py       # 데이터 수집·검증·저장·내보내기
 ├── dags/
@@ -14,7 +14,7 @@ AD_project/
 ├── dashboard.py         # Streamlit 대시보드
 ├── docker-compose.yaml  # Airflow 실행 환경
 └── output/              # 생성 파일 (gitignore)
-
+```
 
 ## 파이프라인 구조
 
