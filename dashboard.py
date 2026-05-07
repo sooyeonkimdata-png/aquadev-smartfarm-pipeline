@@ -75,19 +75,23 @@ def load_alerts():
 
 # 특정 수조 선택 or 조회 기간 변경 시, 동적 필터링 적용
 def load_timeseries(tank_id, days=7):
-    return load_data(f"""
+    con = sqlite3.connect(DB_PATH)
+    df = pd.read_sql(f"""
         SELECT * FROM sensor_timeseries
         WHERE tank_id = '{tank_id}'
-          AND timestamp >= datetime('now', '+9 hours', '-{days} days')
-        ORDER BY timestamp
-    """)
-    
+        ORDER BY timestamp DESC
+        LIMIT {days * 24 * 2}
+    """, con)
+    con.close()
+    return df.sort_values("timestamp").reset_index(drop=True)
+
+
 # 헤더
 col1, col2 = st.columns([3, 1])  # 화면 비율 나누기 -> 제목, 현재 시간 배치
 with col1:
     st.title("AD Eyes: 실시간 스마트양식 관리 시스템")
 with col2:
-    st.markdown(f"**실시간**  \n{datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    st.markdown(f"<div style='text-align: right'>{datetime.now().strftime('%Y-%m-%d %H:%M')}</div>", unsafe_allow_html=True)  # 오른쪽 정렬
 
 st.divider()  # 구분선
 
@@ -146,9 +150,9 @@ fig1 = go.Figure()  # 차트 생성 준비
 fig1.add_trace(go.Scatter(x=ts_df["timestamp"], y=ts_df["nh4_ppm"],
                            name="NH4", line=dict(color="#0066d3", width=2)))  # NH4 라인 그래프 
 fig1.add_trace(go.Scatter(x=ts_df["timestamp"], y=ts_df["no2_ppm"],
-                           name="NO2", line=dict(color="#41abfc", width=2)))  # NO2 라인 그래프 
+                           name="NO2", line=dict(color="#58b7ff", width=2)))  # NO2 라인 그래프 
 fig1.add_trace(go.Scatter(x=ts_df["timestamp"], y=ts_df["no3_ppm"],
-                           name="NO3", yaxis="y2", line=dict(color="#85dbe0", width=2)))  # NO3 보조축 (위 2개 지표와 단위가 다를 수 있으므로)
+                           name="NO3", yaxis="y2", line=dict(color="#9f80f4", width=2)))  # NO3 보조축 (위 2개 지표와 단위가 다를 수 있으므로)
 fig1.update_layout(
     yaxis=dict(title="NH4 / NO2 (ppm)"),                           # 왼쪽 축 제목
     yaxis2=dict(title="NO3 (ppm)", overlaying="y", side="right"),  # 오른쪽 축 제목
@@ -181,7 +185,10 @@ with col_l:  # DO 트렌드
                             width=1.5,
                     ),
                    annotation_text="경보 기준")                          # 임계치(4.0mg/L) 점선 표시
-    fig2.update_layout(height=350)                                     # 그래프 높이 고정
+    fig2.update_layout(
+                    height=350,
+                    title_font=dict(size=25)
+                    )
     st.plotly_chart(fig2, use_container_width=True)                    # 화면 너비에 맞춰 차트 출력
 
 with col_r:  # pH 트렌드
@@ -194,7 +201,10 @@ with col_r:  # pH 트렌드
                             width=1.5,
                     ),
                    annotation_text="경보 기준")                          # 임계치(7.2) 점선 표시
-    fig3.update_layout(height=350)                                     # 그래프 높이 고정
+    fig3.update_layout(
+                    height=350,
+                    title_font=dict(size=25)
+                    )
     st.plotly_chart(fig3, use_container_width=True)                    # 화면 너비에 맞춰 차트 출력
 
 st.divider()
@@ -223,4 +233,4 @@ else:  # 데이터가 있는 경우 표 생성
 
 st.divider()
 
-st.caption("30분마다 자동 갱신 | 에이디수산 AD Eyes 대시보드 자동화 프로젝트")  # 캡션 
+st.caption("30분 단위 자동 갱신 | 에이디수산 AD Eyes 대시보드 자동화 프로젝트")  # 캡션 

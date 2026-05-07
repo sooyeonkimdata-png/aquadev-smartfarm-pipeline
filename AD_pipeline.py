@@ -38,7 +38,7 @@ OUTPUT_DIR.mkdir(exist_ok=True)  # exist_ok=True: 폴더가 이미 있어도 오
 # alert_lo / alert_hi 범위를 벗어날 시, 즉시 알림 보내야 하는 위험 임계값 
 # lo, hi: 정상적인 관리 범위
 THRESHOLDS = {
-    "do_mg_l":         {"lo": 5.0,  "hi": 8.0,   "alert_lo": 4.0}, 
+    "do_mg_l":         {"lo": 5.0,  "hi": 8.0,   "alert_lo": 4.0},
     "nh4_ppm":         {"lo": 0.0,  "hi": 0.10,  "alert_hi": 0.15},
     "no2_ppm":         {"lo": 0.0,  "hi": 0.05,  "alert_hi": 0.08},
     "no3_ppm":         {"lo": 0.0,  "hi": 50.0,  "alert_hi": 40.0},
@@ -70,39 +70,62 @@ def _nitrogen_conversion_speed(nh4, no2, no3, window=4):
     return np.round(np.convolve(speed, kernel, mode='same'), 4)  # 이동 평균 적용 (데이터 부드럽게 만들기))
 
 # 수조별 시계열 + 이상 구간 삽입 + 경보 판정
-def generate_sensor_timeseries(start, end):
+def generate_sensor_timeseries(start, end):  # 데이터 시작 & 종료일 날짜를 받아 센서 데이터 생성
     timestamps = pd.date_range(start, end, freq=f"{FREQ_MIN}min") # 시작일 ~ 종료일까지 30분 간격 시간표 생성 
     n    = len(timestamps)
     slot = max(1, int(60 / FREQ_MIN))  # 30분 간격에 따른 1시간 당 2슬롯 계산
     rows = []
 
-    for tank_id in TANKS:  # 수조별 데이터 생성
-        seed = 42 + sum(ord(c) for c in tank_id)  # 수조별 다른 랜덤 숫자 생성
-        rng  = np.random.default_rng(seed)
+    for tank_id in TANKS:  # 수조 하나씩 데이터 생성
+        seed = 42 + sum(ord(c) for c in tank_id)
+        rng  = np.random.default_rng(seed)  # 난수 생성기 준비
 
-        # 랜덤 워크 생성 (센서별로 정상적인 변화를 보이는 시계열 데이터 array 생성)
-        do_arr   = _randwalk(rng,  5.5,  7.5, n, noise=0.04)    
-        nh4_arr  = _randwalk(rng, 0.02, 0.08, n, noise=0.025)
-        no2_arr  = _randwalk(rng, 0.01, 0.04, n, noise=0.015)
-        no3_arr  = _randwalk(rng,  8.0, 35.0, n, noise=0.02)
-        temp_arr = _randwalk(rng, 27.0, 29.5, n, noise=0.015)
-        ph_arr   = _randwalk(rng,  7.6,  8.3, n, noise=0.012)
-        alk_arr  = _randwalk(rng, 90.0,140.0, n, noise=0.01)
-        sal_arr  = _randwalk(rng, 18.0, 22.0, n, noise=0.008)
+        # 정상 데이터 생성
+        base_do   = rng.uniform(6.0, 7.0)
+        base_nh4  = rng.uniform(0.03, 0.06)
+        base_no2  = rng.uniform(0.01, 0.03)
+        base_temp = rng.uniform(27.5, 29.0)
+        base_ph   = rng.uniform(7.7, 8.1)
+        base_alk  = rng.uniform(100.0, 130.0)
+        base_sal  = rng.uniform(19.0, 21.0)
+        
+        # 약간의 노이즈 추가
+        do_arr   = base_do   + rng.normal(0, 0.15, n)
+        nh4_arr  = base_nh4  + rng.normal(0, 0.008, n)
+        no2_arr  = base_no2  + rng.normal(0, 0.004, n)
+        no3_arr  = np.linspace(10, 45, n) + rng.normal(0, 0.3, n)  # 서서히 쌓이는 구조로
+        temp_arr = base_temp + rng.normal(0, 0.2, n)
+        ph_arr   = base_ph   + rng.normal(0, 0.05, n)
+        alk_arr  = base_alk  + rng.normal(0, 3.0, n)
+        sal_arr  = base_sal  + rng.normal(0, 0.2, n)
 
-        # 이상 구간 삽입
-        b = n // 8  # 전체 데이터를 8등분, 특정 시간대(이상 구간) 탐색
-        s = b * 2; do_arr[s : s+slot*3]  *= 0.52  # DO 52% 수준 급락 -> 폐사 위험 상황
-        s = b * 4; nh4_arr[s : s+slot*5] += 0.14  # 암모니아 농도 상승 -> 사료 과다/오염 상황
-        s = b * 5; no2_arr[s : s+slot*3] += 0.06  # 아질산염 농도 상승
-        s = b * 6; ph_arr[s : s+slot*4]  -= 0.45  # pH 농도 하락 -> 수질 악화 상황
+        # 값 범위 제한 (물리적 한계 설정)
+        do_arr  = np.clip(do_arr,  4.0, 9.0)
+        nh4_arr = np.clip(nh4_arr, 0.0, 0.5)
+        no2_arr = np.clip(no2_arr, 0.0, 0.2)
+        no3_arr = np.clip(no3_arr, 0.0, 70.0)
+        ph_arr  = np.clip(ph_arr,  6.5, 9.0)
+        alk_arr = np.clip(alk_arr, 50.0, 200.0)
+        sal_arr = np.clip(sal_arr, 15.0, 25.0)
+        
+        # 최근 7일 이상 구간 — 날짜 기준으로 직접 삽입
+        one_day = int(24 * 60 / FREQ_MIN)  # 하루 = 48포인트
+        recent  = n - (7 * one_day)
 
-        no3_arr = np.clip(no3_arr + np.linspace(0, 18, n), 0, 70)     # 자연스럽게 NO3가 축적되는 현상 구혀 
-        conv = _nitrogen_conversion_speed(nh4_arr, no2_arr, no3_arr)  # 암모니아 여과 속도 계산
+        # DO 급락 — 5일 전 반나절
+        do_arr[recent + one_day * 2 : recent + one_day * 2 + one_day // 4] = 3.2
 
+        # NH4 급증 — 3일 전 반나절
+        nh4_arr[recent + one_day * 4 : recent + one_day * 4 + one_day // 3] = 0.22
 
-        for i, ts in enumerate(timestamps):  # 생성된 각 시점의 데이터 순회
-            do_v   = round(float(do_arr[i]),   3)
+        # NO2 급증 — 2일 전 반나절
+        no2_arr[recent + one_day * 5 : recent + one_day * 5 + one_day // 4] = 0.12
+
+        # pH 하락 — 1일 전 반나절
+        ph_arr[recent + one_day * 6 : recent + one_day * 6 + one_day // 4] = 7.0
+
+        for i, ts in enumerate(timestamps):  # 시간표와 수치 배열을 하나씩 꺼내 실제 데이터로 변환
+            do_v   = round(float(do_arr[i]),   3)  # 소수점 자릿수 맞추기
             nh4_v  = round(float(nh4_arr[i]),  4)
             no2_v  = round(float(no2_arr[i]),  4)
             no3_v  = round(float(no3_arr[i]),  2)
@@ -110,11 +133,12 @@ def generate_sensor_timeseries(start, end):
             ph_v   = round(float(ph_arr[i]),   2)
             alk_v  = round(float(alk_arr[i]),  1)
             sal_v  = round(float(sal_arr[i]),  2)
-            cs_v   = round(float(conv[i]),     4)
+            cs_v   = round(float(_nitrogen_conversion_speed(    # 질소 전환 속도 계산
+                np.array([nh4_v]), np.array([no2_v]), np.array([no3_v]))[0]), 4)
 
             t = THRESHOLDS
-            alerts = []   # 각 지표가 위험 범위를 벗어날 경우, 리스트에 이름 추가
-            if do_v   < t["do_mg_l"]["alert_lo"]:          alerts.append("DO_LOW")
+            alerts = []
+            if do_v   < t["do_mg_l"]["alert_lo"]:          alerts.append("DO_LOW")  # 기준 치 밖을 갈 경우 alerts 리스트 삽입
             if nh4_v  > t["nh4_ppm"]["alert_hi"]:          alerts.append("NH3_HIGH")
             if no2_v  > t["no2_ppm"]["alert_hi"]:          alerts.append("NO2_HIGH")
             if no3_v  > t["no3_ppm"]["alert_hi"]:          alerts.append("NO3_HIGH")
@@ -123,7 +147,6 @@ def generate_sensor_timeseries(start, end):
             if alk_v  < t["alkalinity_mg_l"]["alert_lo"]:  alerts.append("ALK_LOW")
             if cs_v   < 0.4:                               alerts.append("NITRO_SLOW")
 
-            # 수치 & 경보 정보 -> 딕셔너리로 row리스트에 담기
             rows.append({
                 "timestamp":       ts,      "tank_id":         tank_id,
                 "do_mg_l":         do_v,    "nh4_ppm":         nh4_v,
@@ -137,7 +160,7 @@ def generate_sensor_timeseries(start, end):
             })
 
     df = pd.DataFrame(rows)
-    log.info(f"[더미 생성] {len(df):,}행 | {start.date()}~{end.date()}")  # 완료된 행 개수 로그 남기기
+    log.info(f"[더미 생성] {len(df):,}행 | {start.date()}~{end.date()}")
     return df
 
 
