@@ -3,6 +3,8 @@
 에이디수산(Aqua Development Ltd.) AD Eyes 플랫폼을 참고해 구현한
 스마트양식 수질 모니터링 데이터 파이프라인 토이 프로젝트입니다.
 
+https://aquadev-smartfarm-pipeline-5ewpmjwdutcf3rqzokr8tk.streamlit.app/
+
 
 ## 프로젝트 구조
 ```
